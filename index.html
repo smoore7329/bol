@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>BOL Generator</title>
+<title>Field Material Request Form</title>
 <style>
 /* ─── Print setup (CSS Paged Media) ─────────────────────────────────────────
    Page = US Letter, landscape. Margin 0 on the @page itself — each .sheet
@@ -105,8 +105,8 @@ html, body {
   text-transform: uppercase;
 }
 .title { text-align: center; }
-.title h1 { margin: 0; font-size: 19pt; letter-spacing: 0.04em; }
-.title h1 .cont { font-size: 13pt; font-weight: 600; letter-spacing: 0; }
+.title h1 { margin: 0; font-size: 17pt; white-space: nowrap; letter-spacing: 0.04em; }
+.title h1 .cont { font-size: 11pt; font-weight: 600; letter-spacing: 0; }
 .title p { margin: 3px 0 0; font-size: 9pt; color: var(--muted); }
 
 /* Page-1 info band */
@@ -243,7 +243,7 @@ html, body {
 </style>
 </head>
 <body>
-<div id="app"><main class="message"><h1>Loading BOL…</h1><p>Getting the Pull Request from Airtable.</p></main></div>
+<div id="app"><main class="message"><h1>Loading…</h1><p>Getting the Pull Request from Airtable.</p></main></div>
 
 <script>
 // ─────────────────────────────────────────────────────────────────────────────
@@ -252,12 +252,12 @@ html, body {
 const CONFIG = {
   functionUrl: 'https://vbfspyruvaoqmhuutphl.supabase.co/functions/v1/bol',
   companyName: 'AIME Automation Installation',
-  documentTitle: 'BILL OF LADING',
+  documentTitle: 'FIELD MATERIAL REQUEST FORM',
   documentSubtitle: 'Field Material Delivery — Palestine Breakpack',
   logo: null, // e.g. 'logo.png' after uploading it to this repo; null = company name as text
   receiverNote:
     '*NOTE: Signature of Receiver acknowledges all material received is not in overage, short, or damaged status. ' +
-    'If there is an issue with the material, add notes on this BOL.',
+    'If there is an issue with the material, add notes on this form.',
   fillBlankRows: true, // blank lines on the last page for hand-written additions
   timeZone: 'America/Chicago',
 };
@@ -357,7 +357,7 @@ function render(bol, autoPrint) {
   const root = document.documentElement.style;
   Object.entries(LAYOUT).forEach(([k, v]) => root.setProperty(`--${k}`, `${v}in`));
   root.setProperty('--baysH', `${baysH}in`);
-  document.title = `BOL ${bol.number}`;
+  document.title = `Field Material Request #${bol.number}`;
 
   const printed = new Date().toLocaleDateString('en-US', { timeZone: CONFIG.timeZone });
   const n = bol.lines.length;
@@ -368,7 +368,7 @@ function render(bol, autoPrint) {
       ${header(!page.first)}
       ${page.first ? `
         <div class="info">
-          ${field('BOL / Request #', bol.number)}${field('Requested By', bol.requestedBy)}${field('Date Needed', bol.dateNeeded)}
+          ${field('Request #', bol.number)}${field('Requested By', bol.requestedBy)}${field('Date Needed', bol.dateNeeded)}
           ${field('Delivery Location', bol.deliveryLocation, true)}${field('Printed', printed)}
         </div>
         <div class="bays"><div class="bays-label">BAYS (${bol.bays.length})</div>
@@ -386,13 +386,13 @@ function render(bol, autoPrint) {
       ${page.last && n === 0 ? '<p class="empty">No line items on this request.</p>' : ''}
       <div class="spacer"></div>
       ${page.last ? signatures() : ''}
-      <footer class="page-footer"><span>${esc(CONFIG.companyName)} · BOL ${esc(bol.number)}</span>
+      <footer class="page-footer"><span>${esc(CONFIG.companyName)} · Request #${esc(bol.number)}</span>
         <span>${plural(n, 'line item')} · Page ${idx + 1} of ${pages.length}</span></footer>
     </section>`).join('');
 
   $app.innerHTML = `
     <div class="toolbar">
-      <div class="toolbar-info"><strong>BOL ${esc(bol.number)}</strong><span>${plural(n, 'line item')} · ${plural(pages.length, 'page')}</span></div>
+      <div class="toolbar-info"><strong>Field Material Request #${esc(bol.number)}</strong><span>${plural(n, 'line item')} · ${plural(pages.length, 'page')}</span></div>
       <button type="button" class="print-btn" disabled>Loading…</button>
       <p class="toolbar-tip">In the print dialog: Layout <b>Landscape</b>, Paper <b>Letter</b>, Margins <b>Default</b>, Scale <b>100</b>. Choose “Save as PDF” as the printer to get a PDF.</p>
     </div>
@@ -437,7 +437,7 @@ function demoBol(count) {
   const autoPrint = q.get('print') === '1';
 
   if (!id) {
-    return showMessage('BOL Generator', 'Open a Bill of Lading from the "Print BOL" button on a Pull Request in Airtable. To preview the layout with sample data, add ?id=demo to this address.');
+    return showMessage('Field Material Request Form', 'Open a form from the "Print BOL" button on a Pull Request in Airtable. To preview the layout with sample data, add ?id=demo to this address.');
   }
   if (id === 'demo') {
     return render(demoBol(Math.min(Number(q.get('lines')) || 64, 400)), autoPrint);
@@ -457,7 +457,7 @@ function demoBol(count) {
     }
     render(data, autoPrint);
   } catch (err) {
-    showMessage('Could not reach the BOL service', `${err.message}. Check your internet connection, then reload.`);
+    showMessage('Could not reach the form service', `${err.message}. Check your internet connection, then reload.`);
   }
 })();
 </script>
