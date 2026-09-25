@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>BOL Generator</title>
+<style>
+/* ─── Print setup (CSS Paged Media) ─────────────────────────────────────────
+   Page = US Letter, landscape. Margin 0 on the @page itself — each .sheet
+   carries its own 0.4in white border. A zero page margin also stops the
+   browser from printing its own URL/date headers and footers.          */
+@page {
+  size: 11in 8.5in;
+  margin: 0;
+}
+
+:root {
+  --ink: #111;
+  --muted: #555;
+  --rule: #9a9a9a;
+  --rule-strong: #111;
+  --fill: #f1f3f5;
+  --accent: #1d3b6e;
+  --screen-bg: #e6e8eb;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--screen-bg);
+  color: var(--ink);
+  font-family: Arial, Helvetica, sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ─── Toolbar (screen only) ─────────────────────────────────────────────── */
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 12px 20px;
+  background: #fff;
+  border-bottom: 1px solid #cfd3d8;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+.toolbar-info { display: flex; flex-direction: column; font-size: 14px; }
+.toolbar-info span { color: var(--muted); font-size: 12px; }
+.print-btn {
+  font: 700 16px Arial, Helvetica, sans-serif;
+  padding: 12px 28px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+.print-btn:disabled { opacity: 0.55; cursor: wait; }
+.print-btn:not(:disabled):hover { filter: brightness(1.15); }
+.toolbar-tip { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--muted); }
+
+/* ─── Sheet: one physical page ─────────────────────────────────────────────
+   Every height below comes from LAYOUT in lib/paginate.js via CSS variables. */
+.sheet {
+  width: var(--pageW);
+  height: calc(var(--pageH) - 0.02in); /* hair under 8.5in so Chrome never adds a blank page */
+  padding: var(--margin);
+  margin: 24px auto;
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  break-after: page;
+  page-break-after: always;
+}
+.sheet > * { flex: none; }
+.sheet > * + * { margin-top: var(--gap); }
+.sheet > .spacer { flex: 1 1 auto; margin: 0; }
+.sheet > .page-footer { margin-top: 0; }
+
+/* Header — repeated on every sheet */
+.sheet-header {
+  height: var(--header);
+  display: grid;
+  grid-template-columns: 2.6in 1fr 2.6in;
+  align-items: center;
+  border-bottom: 2px solid var(--rule-strong);
+}
+.brand img { max-height: 0.62in; max-width: 2.5in; display: block; }
+.wordmark {
+  display: inline-block;
+  font-weight: 800;
+  font-size: 13pt;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+.title { text-align: center; }
+.title h1 { margin: 0; font-size: 19pt; letter-spacing: 0.04em; }
+.title h1 .cont { font-size: 13pt; font-weight: 600; letter-spacing: 0; }
+.title p { margin: 3px 0 0; font-size: 9pt; color: var(--muted); }
+
+/* Page-1 info band */
+.info {
+  height: var(--info);
+  display: grid;
+  grid-template-columns: 1.3fr 1.4fr 1fr 2.4fr 1fr;
+  border: 1px solid var(--rule-strong);
+}
+.field { padding: 5px 8px; border-left: 1px solid var(--rule); overflow: hidden; }
+.field:first-child { border-left: 0; }
+.field .label { font-size: 7pt; font-weight: 700; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; }
+.field .value { margin-top: 4px; font-size: 11pt; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Page-1 bay list */
+.bays {
+  height: var(--baysH);
+  border: 1px solid var(--rule-strong);
+  padding: 0 8px calc(var(--baysPad) / 2);
+  overflow: hidden;
+}
+.bays-label {
+  height: var(--baysHead);
+  line-height: var(--baysHead);
+  font-size: 7pt;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+.bays-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 16px;
+}
+.bays-list li {
+  height: var(--bayLine);
+  line-height: var(--bayLine);
+  font-size: 9pt;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bays-list li::before { content: '▪ '; color: var(--accent); }
+
+/* Line items */
+.items { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.items col.c-no { width: 0.45in; }
+.items col.c-qty { width: 1.05in; }
+.items col.c-part { width: 2.35in; }
+.items thead tr { height: var(--thead); }
+.items th {
+  font-size: 7.5pt;
+  letter-spacing: 0.05em;
+  text-align: left;
+  padding: 0 6px;
+  background: var(--fill);
+  border-top: 1px solid var(--rule-strong);
+  border-bottom: 1.5px solid var(--rule-strong);
+}
+.items td {
+  font-size: 9.5pt;
+  line-height: 0.16in;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: middle;
+  overflow: hidden;
+}
+.items th:nth-child(1), .items td.no { text-align: right; color: var(--muted); }
+.items td.no { font-size: 8pt; }
+.items th:nth-child(2), .items td.qty { text-align: center; }
+.items td.qty { font-weight: 700; font-size: 10.5pt; }
+.items td.part { font-family: 'Consolas', 'Courier New', monospace; font-size: 9.5pt; }
+.clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  word-break: break-word;
+}
+.empty { font-size: 10pt; color: var(--muted); font-style: italic; }
+
+/* Signature block — last sheet only, pushed to the bottom by .spacer */
+.signatures { height: var(--sig); padding-top: 0.18in; }
+.sig-row { display: flex; gap: 0.5in; height: 0.52in; }
+.sig-line {
+  flex: 1;
+  border-bottom: 1.5px solid var(--rule-strong);
+  position: relative;
+}
+.sig-line.date { flex: 0 0 2.2in; }
+.sig-line span {
+  position: absolute;
+  left: 0;
+  bottom: -0.17in;
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.note { margin: 0.2in 0 0; font-size: 7.5pt; font-style: italic; color: var(--muted); }
+
+/* Footer — every sheet */
+.page-footer {
+  height: var(--footer);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 7.5pt;
+  color: var(--muted);
+}
+
+/* Error / home pages */
+.message, .home { max-width: 640px; margin: 80px auto; padding: 32px; background: #fff; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,.12); }
+.message h1, .home h1 { margin-top: 0; font-size: 22px; }
+.home code { background: var(--fill); padding: 2px 5px; border-radius: 3px; }
+
+/* ─── Print ─────────────────────────────────────────────────────────────── */
+@media print {
+  html, body { background: #fff; }
+  .toolbar { display: none !important; }
+  .sheet { margin: 0; box-shadow: none; }
+  .sheet:last-child { break-after: auto; page-break-after: auto; }
+}
+
+/* Small screens: let the sheets scroll sideways instead of squashing */
+@media screen and (max-width: 11.5in) {
+  .bol { overflow-x: auto; padding: 0 8px; }
+}
+
+</style>
+</head>
+<body>
+<div id="app"><main class="message"><h1>Loading BOL…</h1><p>Getting the Pull Request from Airtable.</p></main></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+//  SETTINGS — edit these on GitHub (pencil icon → Commit changes).
+// ─────────────────────────────────────────────────────────────────────────────
+const CONFIG = {
+  functionUrl: 'https://vbfspyruvaoqmhuutphl.supabase.co/functions/v1/bol',
+  companyName: 'AIME Automation Installation',
+  documentTitle: 'BILL OF LADING',
+  documentSubtitle: 'Field Material Delivery — Palestine Breakpack',
+  logo: null, // e.g. 'logo.png' after uploading it to this repo; null = company name as text
+  receiverNote:
+    '*NOTE: Signature of Receiver acknowledges all material received is not in overage, short, or damaged status. ' +
+    'If there is an issue with the material, add notes on this BOL.',
+  fillBlankRows: true, // blank lines on the last page for hand-written additions
+  timeZone: 'America/Chicago',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  PAGE MATH — why pages are built here instead of by the browser:
+//  browsers can repeat a header, but none of them (Chrome, Edge, Safari) support
+//  "put this block at the bottom of the LAST printed page". So each page is an
+//  exact 11in × 8.5in sheet, every block has a fixed height taken from LAYOUT
+//  (also pushed into the CSS), and the signature block is placed on the final
+//  sheet only, pinned to its bottom. Nothing can split or spill onto an extra page.
+// ─────────────────────────────────────────────────────────────────────────────
+const LAYOUT = {
+  pageW: 11, pageH: 8.5, margin: 0.4,
+  usable: 7.6,        // height inside the margins (kept slightly under 7.7 for safety)
+  header: 0.85,       // title band — every page
+  info: 0.62,         // Request # / Requested By … — page 1
+  baysHead: 0.26, bayLine: 0.2, baysPad: 0.1, // bay list — page 1
+  thead: 0.3,         // column titles — every page
+  row: 0.27, rowExtraLine: 0.16,
+  footer: 0.28,       // Page X of Y — every page
+  sig: 1.55,          // signature block — last page
+  gap: 0.1,
+};
+const BAYS_PER_LINE = 2, DESC_CHARS = 78, PART_CHARS = 26, MAX_LINES = 3;
+
+function rowLines(l) {
+  const d = Math.ceil((l.description || '').length / DESC_CHARS) || 1;
+  const p = Math.ceil((l.part || '').length / PART_CHARS) || 1;
+  return Math.min(Math.max(d, p), MAX_LINES);
+}
+
+function paginate(lines, bayCount) {
+  const L = LAYOUT;
+  const items = lines.map((line, i) => {
+    const n = rowLines(line);
+    return { ...line, lineNo: i + 1, h: L.row + (n - 1) * L.rowExtraLine };
+  });
+  const baysH = L.baysHead + Math.max(1, Math.ceil(bayCount / BAYS_PER_LINE)) * L.bayLine + L.baysPad;
+  const everyPage = L.header + L.thead + L.footer + L.gap * 2;
+  const firstExtra = L.info + baysH + L.gap * 2;
+  const sigSpace = L.sig + L.gap;
+  const pages = [];
+  let i = 0;
+  while (pages.length < 500) {
+    const first = pages.length === 0;
+    const avail = L.usable - everyPage - (first ? firstExtra : 0);
+    const remaining = items.slice(i);
+    const remainingH = remaining.reduce((s, it) => s + it.h, 0);
+    if (remainingH + sigSpace <= avail) { // everything left fits WITH the signatures
+      const blank = CONFIG.fillBlankRows ? Math.max(0, Math.floor((avail - sigSpace - remainingH) / L.row)) : 0;
+      pages.push({ first, last: true, items: remaining, blankRows: blank });
+      break;
+    }
+    const pageItems = [];
+    let used = 0;
+    while (i < items.length && used + items[i].h <= avail) { used += items[i].h; pageItems.push(items[i]); i++; }
+    // Rows fit but the signatures didn't: hold one back so the last page carries items + signatures.
+    if (i === items.length && pageItems.length > 1) { i--; pageItems.pop(); }
+    if (pageItems.length === 0 && i < items.length) { pageItems.push(items[i]); i++; }
+    pages.push({ first, last: false, items: pageItems, blankRows: 0 });
+  }
+  return { pages, baysH };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  RENDERING
+// ─────────────────────────────────────────────────────────────────────────────
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const $app = document.getElementById('app');
+
+function showMessage(title, text) {
+  $app.innerHTML = `<main class="message"><h1>${esc(title)}</h1><p>${esc(text)}</p></main>`;
+}
+
+function header(continued) {
+  const brand = CONFIG.logo
+    ? `<img src="${esc(CONFIG.logo)}" alt="${esc(CONFIG.companyName)}">`
+    : `<span class="wordmark">${esc(CONFIG.companyName)}</span>`;
+  return `<header class="sheet-header"><div class="brand">${brand}</div>
+    <div class="title"><h1>${esc(CONFIG.documentTitle)}${continued ? '<span class="cont"> (continued)</span>' : ''}</h1>
+    <p>${esc(CONFIG.documentSubtitle)}</p></div><div></div></header>`;
+}
+
+const field = (label, value, wide) =>
+  `<div class="field${wide ? ' wide' : ''}"><div class="label">${esc(label)}</div><div class="value">${esc(value) || '&nbsp;'}</div></div>`;
+
+const signatures = () => `
+  <div class="signatures">
+    <div class="sig-row"><div class="sig-line"><span>SIGNATURE OF MATERIAL HANDLER (DELIVERED BY)</span></div><div class="sig-line date"><span>DELIVERY DATE</span></div></div>
+    <div class="sig-row"><div class="sig-line"><span>SIGNATURE OF INSTALL CONTRACTOR / RECEIVER</span></div><div class="sig-line date"><span>DATE RECEIVED</span></div></div>
+    <p class="note">${esc(CONFIG.receiverNote)}</p>
+  </div>`;
+
+function render(bol, autoPrint) {
+  const { pages, baysH } = paginate(bol.lines, bol.bays.length);
+  const root = document.documentElement.style;
+  Object.entries(LAYOUT).forEach(([k, v]) => root.setProperty(`--${k}`, `${v}in`));
+  root.setProperty('--baysH', `${baysH}in`);
+  document.title = `BOL ${bol.number}`;
+
+  const printed = new Date().toLocaleDateString('en-US', { timeZone: CONFIG.timeZone });
+  const n = bol.lines.length;
+  const plural = (c, w) => `${c} ${w}${c === 1 ? '' : 's'}`;
+
+  const sheets = pages.map((page, idx) => `
+    <section class="sheet">
+      ${header(!page.first)}
+      ${page.first ? `
+        <div class="info">
+          ${field('BOL / Request #', bol.number)}${field('Requested By', bol.requestedBy)}${field('Date Needed', bol.dateNeeded)}
+          ${field('Delivery Location', bol.deliveryLocation, true)}${field('Printed', printed)}
+        </div>
+        <div class="bays"><div class="bays-label">BAYS (${bol.bays.length})</div>
+          <ul class="bays-list">${bol.bays.length ? bol.bays.map((b) => `<li title="${esc(b)}">${esc(b)}</li>`).join('') : '<li>—</li>'}</ul>
+        </div>` : ''}
+      <table class="items">
+        <colgroup><col class="c-no"><col class="c-qty"><col class="c-part"><col class="c-desc"></colgroup>
+        <thead><tr><th>#</th><th>QTY REQUESTED</th><th>PART #</th><th>DESCRIPTION</th></tr></thead>
+        <tbody>
+          ${page.items.map((it) => `<tr style="height:${it.h}in"><td class="no">${it.lineNo}</td><td class="qty">${esc(it.qty)}</td>
+            <td class="part"><div class="clamp">${esc(it.part)}</div></td><td class="desc"><div class="clamp">${esc(it.description)}</div></td></tr>`).join('')}
+          ${`<tr class="blank" style="height:${LAYOUT.row}in"><td></td><td></td><td></td><td></td></tr>`.repeat(page.blankRows)}
+        </tbody>
+      </table>
+      ${page.last && n === 0 ? '<p class="empty">No line items on this request.</p>' : ''}
+      <div class="spacer"></div>
+      ${page.last ? signatures() : ''}
+      <footer class="page-footer"><span>${esc(CONFIG.companyName)} · BOL ${esc(bol.number)}</span>
+        <span>${plural(n, 'line item')} · Page ${idx + 1} of ${pages.length}</span></footer>
+    </section>`).join('');
+
+  $app.innerHTML = `
+    <div class="toolbar">
+      <div class="toolbar-info"><strong>BOL ${esc(bol.number)}</strong><span>${plural(n, 'line item')} · ${plural(pages.length, 'page')}</span></div>
+      <button type="button" class="print-btn" disabled>Loading…</button>
+      <p class="toolbar-tip">In the print dialog: Layout <b>Landscape</b>, Paper <b>Letter</b>, Margins <b>Default</b>, Scale <b>100</b>. Choose “Save as PDF” as the printer to get a PDF.</p>
+    </div>
+    <div class="bol">${sheets}</div>`;
+
+  // Enable printing once fonts and the logo have loaded.
+  const btn = $app.querySelector('.print-btn');
+  btn.onclick = () => window.print();
+  const imgs = [...document.images].filter((im) => !im.complete);
+  Promise.all([document.fonts?.ready, ...imgs.map((im) => new Promise((r) => { im.onload = im.onerror = r; }))])
+    .then(() => {
+      btn.disabled = false;
+      btn.textContent = 'Print / Save to PDF';
+      if (autoPrint) setTimeout(() => window.print(), 300);
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  DEMO DATA  (?id=demo, add &lines=120 to test long lists)
+// ─────────────────────────────────────────────────────────────────────────────
+function demoBol(count) {
+  const parts = [
+    ['151-00111', 'Cross-Aisle Tie_Connection at Posts'], ['151-00116-21.125', 'Upright Frame_10 Level_21.125'],
+    ['151-00192-22', 'Transfer Deck_Header Channel_82"'], ['151-00192-49', 'Transfer Deck_Header Channel_170"'],
+    ['151-00213', 'Product Lift (AIB) P&D Support Frame'], ['151-00710', 'Product Aisle_Lead In_Cross-Aisle Tie_Post to Post'],
+    ['151-00845-3', 'Rail Splice Plate Assembly with Hardware Kit — includes (4) M10 bolts, (4) flange nuts and (2) shim packs per splice location'],
+    ['170-01022', 'Anchor Bolt 1/2" x 4-3/4" Wedge'],
+  ];
+  return {
+    number: 'DEMO', requestedBy: 'Steve', dateNeeded: '9/27/2026', deliveryLocation: 'Aisle 25 — East end',
+    bays: ['LCE-04-07 / PA-025-028 · Turn Around East [#829]', 'LCW-01-04 / PA-029-035 · Lift Cell West [#826]', 'PA-052–PA-053 · Bay 10-12 [#434]'],
+    lines: Array.from({ length: count }, (_, i) => ({ qty: String(((i * 7) % 24) + 1), part: parts[i % 8][0], description: parts[i % 8][1] })),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  START
+// ─────────────────────────────────────────────────────────────────────────────
+(async function main() {
+  const q = new URLSearchParams(location.search);
+  const id = (q.get('id') || '').trim();
+  const autoPrint = q.get('print') === '1';
+
+  if (!id) {
+    return showMessage('BOL Generator', 'Open a Bill of Lading from the "Print BOL" button on a Pull Request in Airtable. To preview the layout with sample data, add ?id=demo to this address.');
+  }
+  if (id === 'demo') {
+    return render(demoBol(Math.min(Number(q.get('lines')) || 64, 400)), autoPrint);
+  }
+
+  try {
+    const p = new URLSearchParams({ id });
+    if (q.get('key')) p.set('key', q.get('key'));
+    const res = await fetch(`${CONFIG.functionUrl}?${p}`, { cache: 'no-store' });
+    const data = await res.json().catch(() => ({ error: `Unexpected response (${res.status}) from the Supabase function.` }));
+    if (!res.ok || data.error) {
+      if (res.status === 401) {
+        return showMessage('Supabase function is locked', 'In Supabase, open Edge Functions → bol → Details and turn OFF "Verify JWT", then save.');
+      }
+      const title = res.status === 404 ? 'Record not found' : res.status === 403 ? 'Access denied' : res.status === 400 ? 'Invalid link' : 'Could not load from Airtable';
+      return showMessage(title, data.error || data.message || data.msg || `Error ${res.status}`);
+    }
+    render(data, autoPrint);
+  } catch (err) {
+    showMessage('Could not reach the BOL service', `${err.message}. Check your internet connection, then reload.`);
+  }
+})();
+</script>
+
+</body>
+</html>
